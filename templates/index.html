@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiMo Cross-Chain Arbitrage Engine</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #0d1117, #161b22);
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            font-size: 1.5rem;
+            background: linear-gradient(90deg, #58a6ff, #3fb950, #f0883e);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header .subtitle { color: #8b949e; font-size: 0.85rem; margin-top: 0.3rem; }
+        .status-dots { display: flex; gap: 0.5rem; }
+        .dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        .dot-green { background: #3fb950; }
+        .dot-yellow { background: #d29922; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        
+        .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+        
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .stat .value { font-size: 1.4rem; font-weight: 700; color: #58a6ff; }
+        .stat .label { color: #8b949e; font-size: 0.75rem; margin-top: 0.2rem; }
+        .stat .change { font-size: 0.8rem; margin-top: 0.3rem; }
+        .up { color: #3fb950; }
+        .down { color: #f85149; }
+        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+        
+        .panel {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .panel-header {
+            padding: 0.8rem 1rem;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .panel-header h3 { font-size: 0.9rem; color: #c9d1d9; }
+        .panel-body { padding: 1rem; }
+        
+        .btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            background: #21262d;
+            color: #c9d1d9;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: #30363d; border-color: #58a6ff; }
+        .btn-primary {
+            background: linear-gradient(135deg, #238636, #2ea043);
+            border-color: #238636;
+            color: white;
+        }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-danger { background: #da3633; border-color: #da3633; color: white; }
+        
+        table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        th {
+            text-align: left;
+            padding: 0.5rem;
+            border-bottom: 1px solid #30363d;
+            color: #8b949e;
+            font-weight: 600;
+        }
+        td {
+            padding: 0.5rem;
+            border-bottom: 1px solid #21262d;
+            font-family: monospace;
+        }
+        tr:hover { background: #1c2128; }
+        
+        .token-badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .token-usdc { background: #1a3a2a; color: #3fb950; }
+        .token-usdt { background: #1a2a3a; color: #58a6ff; }
+        .token-dai { background: #3a2a1a; color: #f0883e; }
+        .token-weth { background: #2a1a3a; color: #bc8cff; }
+        .token-wbtc { background: #3a3a1a; color: #e3b341; }
+        
+        .chain-badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .chain-ethereum { background: #1a2a3a; color: #627eea; }
+        .chain-arbitrum { background: #1a3a3a; color: #28a0f0; }
+        .chain-polygon { background: #2a1a3a; color: #8247e5; }
+        .chain-base { background: #1a2a2a; color: #0052ff; }
+        .chain-optimism { background: #3a1a1a; color: #ff0420; }
+        .chain-bsc { background: #3a3a1a; color: #f0b90b; }
+        
+        .profit { color: #3fb950; font-weight: 700; }
+        .loss { color: #f85149; }
+        .neutral { color: #8b949e; }
+        
+        .controls {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        select, input {
+            padding: 0.5rem;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 0.85rem;
+        }
+        select:focus, input:focus { outline: none; border-color: #58a6ff; }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #8b949e;
+            font-size: 0.85rem;
+        }
+        .spinner {
+            width: 14px; height: 14px;
+            border: 2px solid #30363d;
+            border-top-color: #58a6ff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .opportunity-card {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 0.8rem;
+            margin-bottom: 0.5rem;
+            transition: border-color 0.2s;
+        }
+        .opportunity-card:hover { border-color: #3fb950; }
+        .opportunity-card .route {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #c9d1d9;
+            margin-bottom: 0.3rem;
+        }
+        .opportunity-card .details {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.75rem;
+            color: #8b949e;
+        }
+        
+        .agent-list { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+        .agent-badge {
+            padding: 0.3rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .agent-running { background: #0d2818; color: #3fb950; border: 1px solid #238636; }
+        .agent-idle { background: #2d2200; color: #e3b341; border: 1px solid #9e6a03; }
+        .agent-error { background: #2d0000; color: #f85149; border: 1px solid #da3633; }
+        
+        .full-width { grid-column: 1 / -1; }
+        
+        .price-cell { font-size: 0.75rem; }
+        .price-cell .dex { color: #8b949e; font-size: 0.65rem; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>MiMo Cross-Chain Arbitrage Engine</h1>
+            <div class="subtitle">Multi-agent AI system for cross-chain arbitrage detection and execution</div>
+        </div>
+        <div class="status-dots">
+            <div class="dot dot-green" title="Engine running"></div>
+            <div class="dot dot-green" title="Agents active"></div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="agent-list" id="agentList" style="margin-bottom:1rem;"></div>
+        
+        <div class="stats-bar" id="statsBar">
+            <div class="stat"><div class="value" id="statOpps">--</div><div class="label">Opportunities Found</div></div>
+            <div class="stat"><div class="value" id="statScans">--</div><div class="label">Scans Completed</div></div>
+            <div class="stat"><div class="value" id="statProfit">--</div><div class="label">Best Spread (bps)</div></div>
+            <div class="stat"><div class="value" id="statChains">--</div><div class="label">Chains Monitored</div></div>
+            <div class="stat"><div class="value" id="statTokens">--</div><div class="label">Tokens Tracked</div></div>
+        </div>
+        
+        <div class="grid">
+            <!-- Price Matrix -->
+            <div class="panel full-width">
+                <div class="panel-header">
+                    <h3>Cross-Chain Price Matrix</h3>
+                    <button class="btn" onclick="loadPrices()">Refresh Prices</button>
+                </div>
+                <div class="panel-body" id="priceMatrix">
+                    <div class="loading"><div class="spinner"></div> Loading prices...</div>
+                </div>
+            </div>
+            
+            <!-- Scanner -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>Opportunity Scanner</h3>
+                    <button class="btn btn-primary" onclick="scanOpportunities()">Scan Now</button>
+                </div>
+                <div class="panel-body">
+                    <div class="controls">
+                        <select id="minProfit">
+                            <option value="20">Min 20 bps</option>
+                            <option value="30" selected>Min 30 bps</option>
+                            <option value="50">Min 50 bps</option>
+                            <option value="100">Min 100 bps</option>
+                        </select>
+                    </div>
+                    <div id="scanResults">
+                        <div class="neutral" style="font-size:0.85rem;">Click "Scan Now" to find arbitrage opportunities</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Analyzer -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>Trade Analyzer</h3>
+                    <button class="btn" onclick="analyzeSelected()">Analyze</button>
+                </div>
+                <div class="panel-body">
+                    <div class="controls">
+                        <select id="analyzeToken"><option value="USDC">USDC</option><option value="USDT">USDT</option><option value="WETH">WETH</option><option value="WBTC">WBTC</option></select>
+                        <select id="analyzeBuy"><option value="ethereum">Ethereum</option><option value="arbitrum">Arbitrum</option><option value="polygon">Polygon</option><option value="base">Base</option></select>
+                        <select id="analyzeSell"><option value="arbitrum">Arbitrum</option><option value="ethereum">Ethereum</option><option value="polygon">Polygon</option><option value="base">Base</option></select>
+                    </div>
+                    <div id="analysisResult">
+                        <div class="neutral" style="font-size:0.85rem;">Select parameters and click "Analyze"</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Risk Assessment -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>Risk Assessment</h3>
+                    <button class="btn" onclick="assessRisk()">Assess</button>
+                </div>
+                <div class="panel-body" id="riskResult">
+                    <div class="neutral" style="font-size:0.85rem;">Click "Assess" to evaluate current risk levels</div>
+                </div>
+            </div>
+            
+            <!-- Strategy -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>AI Strategy Generator</h3>
+                    <button class="btn btn-primary" onclick="generateStrategy()">Generate</button>
+                </div>
+                <div class="panel-body">
+                    <div class="controls">
+                        <input type="number" id="capital" value="100000" placeholder="Capital USD" style="width:120px;">
+                        <select id="riskTolerance"><option value="low">Low Risk</option><option value="medium" selected>Medium</option><option value="high">High Risk</option></select>
+                    </div>
+                    <div id="strategyResult">
+                        <div class="neutral" style="font-size:0.85rem;">Set parameters and click "Generate" for AI strategy</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Execution History -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>Execution History</h3>
+                    <button class="btn" onclick="loadHistory()">Refresh</button>
+                </div>
+                <div class="panel-body" id="historyResult">
+                    <div class="neutral" style="font-size:0.85rem;">No executions yet</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '';
+        let lastOpportunities = [];
+        
+        async function apiCall(endpoint, data = null) {
+            const opts = data ? { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) } : {};
+            const resp = await fetch(API + endpoint, opts);
+            return resp.json();
+        }
+        
+        function tokenClass(t) { return 'token-' + t.toLowerCase().replace('wrapped','').substring(0,4); }
+        function chainClass(c) { return 'chain-' + c.toLowerCase(); }
+        
+        async function loadStatus() {
+            try {
+                const agents = await apiCall('/api/agents');
+                const list = document.getElementById('agentList');
+                list.innerHTML = '';
+                for (const [name, info] of Object.entries(agents)) {
+                    const b = document.createElement('span');
+                    b.className = 'agent-badge agent-' + info.state;
+                    b.textContent = name + ' (' + info.tasks + ')';
+                    list.appendChild(b);
+                }
+                
+                const metrics = await apiCall('/api/metrics');
+                document.getElementById('statScans').textContent = metrics.counters?.scan_completed || 0;
+                document.getElementById('statChains').textContent = '7';
+                document.getElementById('statTokens').textContent = '10';
+            } catch(e) { console.error(e); }
+        }
+        
+        async function loadPrices() {
+            const el = document.getElementById('priceMatrix');
+            el.innerHTML = '<div class="loading"><div class="spinner"></div> Fetching prices...</div>';
+            try {
+                const data = await apiCall('/api/prices');
+                const matrix = data.price_matrix || {};
+                const chains = data.chains || [];
+                const tokens = data.tokens || [];
+                
+                let html = '<table><thead><tr><th>Token</th>';
+                chains.forEach(c => html += '<th>' + c + '</th>');
+                html += '</tr></thead><tbody>';
+                
+                tokens.forEach(token => {
+                    html += '<tr><td><span class="token-badge ' + tokenClass(token) + '">' + token + '</span></td>';
+                    chains.forEach(chain => {
+                        const info = matrix[token]?.[chain];
+                        if (info) {
+                            const spreadClass = info.spread_bps > 20 ? 'up' : 'neutral';
+                            html += '<td class="price-cell">$' + info.price.toFixed(info.price < 10 ? 4 : 2) + '<br><span class="dex">' + info.dex + '</span><br><span class="' + spreadClass + '">' + info.spread_bps + ' bps</span></td>';
+                        } else {
+                            html += '<td class="neutral">--</td>';
+                        }
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+                el.innerHTML = html;
+            } catch(e) { el.innerHTML = '<div class="loss">Error loading prices</div>'; }
+        }
+        
+        async function scanOpportunities() {
+            const el = document.getElementById('scanResults');
+            el.innerHTML = '<div class="loading"><div class="spinner"></div> Scanning cross-chain prices...</div>';
+            try {
+                const minProfit = parseInt(document.getElementById('minProfit').value);
+                const data = await apiCall('/api/scan', { min_profit_bps: minProfit });
+                lastOpportunities = data.opportunities || [];
+                
+                document.getElementById('statOpps').textContent = data.count || 0;
+                if (data.opportunities?.length > 0) {
+                    document.getElementById('statProfit').textContent = data.opportunities[0].spread_bps;
+                }
+                
+                let html = '';
+                (data.opportunities || []).slice(0, 8).forEach((opp, i) => {
+                    const profitClass = opp.net_profit_bps > 0 ? 'profit' : 'loss';
+                    html += '<div class="opportunity-card"><div class="route">' + 
+                        '<span class="token-badge ' + tokenClass(opp.token) + '">' + opp.token + '</span> ' +
+                        '<span class="chain-badge ' + chainClass(opp.buy.split('/')[0]) + '">' + opp.buy + '</span> → ' +
+                        '<span class="chain-badge ' + chainClass(opp.sell.split('/')[0]) + '">' + opp.sell + '</span></div>' +
+                        '<div class="details"><span>Spread: ' + opp.spread_bps + ' bps</span>' +
+                        '<span>Bridge: $' + opp.bridge_cost + '</span>' +
+                        '<span>Gas: $' + opp.gas_cost + '</span>' +
+                        '<span class="' + profitClass + '">Net: ' + opp.net_profit_bps + ' bps</span>' +
+                        '<span>Liq: $' + (opp.liquidity_usd/1e6).toFixed(1) + 'M</span></div></div>';
+                });
+                
+                if (!html) html = '<div class="neutral">No opportunities found at ' + minProfit + ' bps threshold</div>';
+                if (data.analysis) html += '<div style="margin-top:0.8rem;font-size:0.8rem;color:#8b949e;max-height:150px;overflow-y:auto;">' + data.analysis.substring(0, 500) + '</div>';
+                el.innerHTML = html;
+            } catch(e) { el.innerHTML = '<div class="loss">Scan error: ' + e.message + '</div>'; }
+        }
+        
+        async function analyzeSelected() {
+            const el = document.getElementById('analysisResult');
+            el.innerHTML = '<div class="loading"><div class="spinner"></div> Analyzing...</div>';
+            try {
+                const data = await apiCall('/api/analyze', {
+                    token: document.getElementById('analyzeToken').value,
+                    buy_chain: document.getElementById('analyzeBuy').value,
+                    sell_chain: document.getElementById('analyzeSell').value,
+                    trade_size_usd: 10000,
+                    spread_bps: 40,
+                    bridge_cost: 5,
+                    gas_cost: 3,
+                });
+                const cb = data.cost_breakdown || {};
+                let html = '<table>';
+                Object.entries(cb).forEach(([k,v]) => {
+                    html += '<tr><td style="color:#8b949e;">' + k + '</td><td>' + (typeof v === 'number' ? v.toFixed(2) : v) + '</td></tr>';
+                });
+                html += '</table>';
+                const verdictClass = data.verdict === 'execute' ? 'up' : 'down';
+                html += '<div style="margin-top:0.5rem;font-weight:700;" class="' + verdictClass + '">Verdict: ' + (data.verdict || 'N/A').toUpperCase() + '</div>';
+                el.innerHTML = html;
+            } catch(e) { el.innerHTML = '<div class="loss">Error: ' + e.message + '</div>'; }
+        }
+        
+        async function assessRisk() {
+            const el = document.getElementById('riskResult');
+            el.innerHTML = '<div class="loading"><div class="spinner"></div> Assessing risk...</div>';
+            try {
+                const data = await apiCall('/api/risk', { buy_chain: 'ethereum', sell_chain: 'arbitrum' });
+                const bd = data.breakdown || {};
+                let html = '<div style="margin-bottom:0.8rem;font-size:1.2rem;font-weight:700;">Risk Score: ' + data.overall_risk_score + '/100 <span style="font-size:0.8rem;">(' + data.risk_level + ')</span></div>';
+                html += '<table>';
+                Object.entries(bd).forEach(([k,v]) => {
+                    const barColor = v < 30 ? '#3fb950' : v < 60 ? '#d29922' : '#f85149';
+                    html += '<tr><td style="color:#8b949e;">' + k + '</td><td><div style="background:#21262d;border-radius:4px;height:8px;width:100px;display:inline-block;"><div style="background:' + barColor + ';height:8px;border-radius:4px;width:' + v + 'px;"></div></div> ' + v + '</td></tr>';
+                });
+                html += '</table>';
+                el.innerHTML = html;
+            } catch(e) { el.innerHTML = '<div class="loss">Error: ' + e.message + '</div>'; }
+        }
+        
+        async function generateStrategy() {
+            const el = document.getElementById('strategyResult');
+            el.innerHTML = '<div class="loading"><div class="spinner"></div> Generating AI strategy...</div>';
+            try {
+                const data = await apiCall('/api/strategy', {
+                    capital_usd: parseInt(document.getElementById('capital').value),
+                    risk_tolerance: document.getElementById('riskTolerance').value,
+                });
+                el.innerHTML = '<div style="font-size:0.8rem;white-space:pre-wrap;max-height:300px;overflow-y:auto;">' + (data.strategy || 'No strategy generated') + '</div>';
+            } catch(e) { el.innerHTML = '<div class="loss">Error: ' + e.message + '</div>'; }
+        }
+        
+        async function loadHistory() {
+            const el = document.getElementById('historyResult');
+            try {
+                const data = await apiCall('/api/history');
+                if (!data.history?.length) { el.innerHTML = '<div class="neutral">No executions yet</div>'; return; }
+                let html = '<table><thead><tr><th>Token</th><th>Route</th><th>Mode</th><th>Time</th></tr></thead><tbody>';
+                data.history.forEach(h => {
+                    html += '<tr><td>' + h.trade?.token + '</td><td>' + h.trade?.buy_chain + ' → ' + h.trade?.sell_chain + '</td><td>' + h.mode + '</td><td>' + h.timestamp?.split('T')[1]?.split('.')[0] + '</td></tr>';
+                });
+                html += '</tbody></table>';
+                el.innerHTML = html;
+            } catch(e) { el.innerHTML = '<div class="loss">Error</div>'; }
+        }
+        
+        // Init
+        loadStatus();
+        loadPrices();
+        setInterval(loadStatus, 30000);
+        setInterval(loadPrices, 60000);
+    </script>
+</body>
+</html>
